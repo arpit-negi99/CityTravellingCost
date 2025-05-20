@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Dehradun Route Finder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 500px;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 text-gray-800 font-sans">
+    <div class="max-w-4xl mx-auto p-6">
+        <h1 class="text-3xl font-bold text-center mb-4">Dehradun Route Finder</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <select id="start" class="p-2 rounded border bg-white"></select>
+            <select id="end" class="p-2 rounded border bg-white"></select>
+            <select id="mode" class="p-2 rounded border bg-white">
+                <option value="driving-car">Car</option>
+                <option value="cycling-regular">Bike</option>
+                <option value="driving-hgv">Auto</option>
+                <option value="foot-walking">Walk</option>
+            </select>
+            <button onclick="getRoute()" class="bg-blue-600 text-white p-2 rounded">Get Route</button>
+        </div>
+
+        <div id="info" class="mb-4 text-center text-sm text-gray-700"></div>
+        <div id="map" class="rounded shadow-md"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        const places = {{ places| tojson }};
+        const startSelect = document.getElementById("start");
+        const endSelect = document.getElementById("end");
+
+        places.forEach(place => {
+            const opt1 = new Option(place, place);
+            const opt2 = new Option(place, place);
+            startSelect.add(opt1);
+            endSelect.add(opt2.cloneNode(true));
+        });
+
+        const map = L.map('map').setView([30.3255, 78.0437], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        let routeLine = null;
+        let startMarker = null;
+        let endMarker = null;
+
+        async function getRoute() {
+            const source = startSelect.value;
+            const destination = endSelect.value;
+            const mode = document.getElementById("mode").value;
+
+            if (!source || !destination || source === destination) {
+                alert("Choose different start and end locations.");
+                return;
+            }
+
+            try {
+                const res = await axios.post("/route", { source, destination, mode });
+                const data = res.data;
+
+                if (routeLine) map.removeLayer(routeLine);
+                if (startMarker) map.removeLayer(startMarker);
+                if (endMarker) map.removeLayer(endMarker);
+
+                const latlngs = data.geometry.map(p => [p[1], p[0]]);
+                routeLine = L.polyline(latlngs, { color: 'blue', weight: 5 }).addTo(map);
+                map.fitBounds(routeLine.getBounds());
+
+                startMarker = L.marker(latlngs[0]).addTo(map).bindPopup("Start: " + source).openPopup();
+                endMarker = L.marker(latlngs[latlngs.length - 1]).addTo(map).bindPopup("End: " + destination);
+
+                document.getElementById("info").innerHTML = `
+                    <div><strong>Distance:</strong> ${data.distance} km</div>
+                    <div><strong>Estimated Time:</strong> ${data.time} mins</div>
+                    <div><strong>Cost:</strong> ₹${data.cost}</div>
+                `;
+            } catch (err) {
+                alert("Error fetching route. Try again.");
+                console.error(err);
+            }
+        }
+    </script>
+</body>
+
+</html>
